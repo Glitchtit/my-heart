@@ -3,7 +3,7 @@
 // --- Configuration ---
 constexpr uint8_t  BUTTON_PIN  = 2;     // button between D2 and GND (uses INPUT_PULLUP)
 constexpr uint8_t  VOLUME      = 22;    // 0..30
-constexpr uint8_t  TRACK_COUNT = 10;    // number of MP3 files on the SD card (0001.mp3 ... 000N.mp3)
+constexpr uint8_t  TRACK_COUNT = 53;    // number of MP3 files on the SD card (0001.mp3 ... 000N.mp3)
 constexpr uint16_t DEBOUNCE_MS = 40;
 
 // DFPlayer Mini is wired to the Nano's HARDWARE UART:
