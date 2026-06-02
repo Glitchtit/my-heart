@@ -19,8 +19,8 @@ A tiny Arduino Nano + DFPlayer Mini build: press one button, hear a random audio
             ┌──────────┐                  ┌──────────┐
        5V ──┤ 5V       │──────────────────┤ VCC      │
       GND ──┤ GND      │──────────────────┤ GND      │
-            │ D11 (TX) │──[ 1kΩ ]─────────┤ RX       │
-            │ D10 (RX) │──────────────────┤ TX       │
+            │ D1 (TX)  │──[ 1kΩ ]─────────┤ RX       │
+            │ D0 (RX)  │──────────────────┤ TX       │
             │          │                  │ SPK_1    ├──┐
             │          │                  │ SPK_2    ├──┤  Speaker (4–8 Ω)
             │          │                  │ GND_SPK  │  │  (use SPK_1 & SPK_2,
@@ -37,8 +37,8 @@ A tiny Arduino Nano + DFPlayer Mini build: press one button, hear a random audio
 |--------------|-----------------------------------|---------------------------------------------|
 | `5V`         | DFPlayer `VCC`                    | DFPlayer accepts 3.3–5 V; 5 V gives more headroom for the onboard amp |
 | `GND`        | DFPlayer `GND`, button GND leg    | Common ground                               |
-| `D11` (TX)   | DFPlayer `RX` via **1 kΩ** resistor | Resistor drops the Nano's 5 V logic toward DFPlayer's 3.3 V level |
-| `D10` (RX)   | DFPlayer `TX`                     | Direct                                      |
+| `D1` (TX)    | DFPlayer `RX` via **1 kΩ** resistor | Hardware-UART TX. Resistor drops the Nano's 5 V logic toward DFPlayer's 3.3 V level. **Shared with the USB-serial chip — see upload note below.** |
+| `D0` (RX)    | DFPlayer `TX`                     | Hardware-UART RX. **Disconnect this wire before uploading firmware** (otherwise the upload fails with `not in sync`). |
 | `D2`         | One leg of push-button            | Other leg of button to `GND`. Uses `INPUT_PULLUP` — no external resistor needed |
 | DFPlayer `SPK_1` / `SPK_2` | Speaker terminals       | Don't connect the speaker to `GND` — use both SPK pins for the differential amp output |
 
@@ -60,14 +60,23 @@ A safe layout that always works:
 
 ## Build / upload
 
+The DFPlayer talks to the Nano over the **hardware UART (D0/D1)**, which is the same serial line the USB-to-serial chip uses for flashing. Two consequences:
+
+- **Disconnect the DFPlayer's wire from `D0` before every upload** — if the module is driving `D0` while avrdude tries to talk to the bootloader, the upload fails with `not in sync`. Reconnect it after flashing.
+- **There is no USB serial monitor while running.** Init failure (bad wiring / missing SD) is reported by a **fast blink on the onboard LED (D13)** instead of a serial message.
+
+Steps:
+
 1. Install the **DFRobotDFPlayerMini** library via the Arduino IDE Library Manager (or `arduino-cli lib install "DFRobotDFPlayerMini"`).
 2. Open `my-heart.ino`.
 3. Edit the constants at the top:
    - `TRACK_COUNT` — set to the number of MP3 files on your card.
    - `VOLUME` — `0`–`30`.
-4. Select **Tools → Board → Arduino Nano** and the correct serial port, then upload.
+4. **Unplug the DFPlayer wire from `D0`.**
+5. Select **Tools → Board → Arduino Nano** and the correct serial port, then upload.
+6. Reconnect the `D0` wire.
 
-With `arduino-cli`:
+With `arduino-cli` (with the `D0` wire disconnected):
 
 ```sh
 arduino-cli compile --fqbn arduino:avr:nano:cpu=atmega328 .
@@ -85,7 +94,8 @@ arduino-cli upload  --fqbn arduino:avr:nano:cpu=atmega328 -p /dev/ttyUSB0 .
 
 ## Troubleshooting
 
-- **`DFPlayer init failed` on serial monitor** — check TX/RX aren't swapped, confirm the SD card is FAT32, and that you have the 1 kΩ resistor on the Nano-TX → DFPlayer-RX line.
+- **Onboard LED (D13) blinks rapidly** — DFPlayer init failed. Check TX/RX aren't swapped (DFPlayer `TX` → Nano `D0`, DFPlayer `RX` → Nano `D1`), confirm the SD card is FAT32, and that you have the 1 kΩ resistor on the Nano-`D1` → DFPlayer-`RX` line.
+- **Upload fails with `not in sync` / `resp=0x00`** — the DFPlayer is still connected to `D0` and is corrupting the bootloader handshake. Unplug the `D0` wire, upload, then reconnect it.
 - **Loud pop on power-up** — add the 10–100 µF cap across DFPlayer VCC/GND.
 - **Wrong track plays** — the DFPlayer indexes by *write order*, not filename. Reformat the SD and copy files one at a time in numeric order.
 - **Button triggers twice** — increase `DEBOUNCE_MS`.

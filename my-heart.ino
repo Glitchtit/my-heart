@@ -1,16 +1,21 @@
-#include <SoftwareSerial.h>
 #include <DFRobotDFPlayerMini.h>
 
 // --- Configuration ---
-constexpr uint8_t  BUTTON_PIN       = 2;          // button between D2 and GND (uses INPUT_PULLUP)
-constexpr uint8_t  DFPLAYER_RX_PIN  = 10;         // Arduino RX  <-  DFPlayer TX
-constexpr uint8_t  DFPLAYER_TX_PIN  = 11;         // Arduino TX  ->  DFPlayer RX (through 1k resistor)
-constexpr uint8_t  VOLUME           = 22;         // 0..30
-constexpr uint8_t  TRACK_COUNT      = 10;         // number of MP3 files on the SD card (0001.mp3 ... 000N.mp3)
-constexpr uint16_t DEBOUNCE_MS      = 40;
+constexpr uint8_t  BUTTON_PIN  = 2;     // button between D2 and GND (uses INPUT_PULLUP)
+constexpr uint8_t  VOLUME      = 22;    // 0..30
+constexpr uint8_t  TRACK_COUNT = 10;    // number of MP3 files on the SD card (0001.mp3 ... 000N.mp3)
+constexpr uint16_t DEBOUNCE_MS = 40;
+
+// DFPlayer Mini is wired to the Nano's HARDWARE UART:
+//   Nano D1 (TX) -> DFPlayer RX  (through a 1k resistor)
+//   Nano D0 (RX) <- DFPlayer TX
+// Because this UART is shared with the USB-to-serial chip:
+//   * You MUST disconnect the DFPlayer's wire from D0 before uploading new firmware,
+//     otherwise the upload fails with "not in sync".
+//   * The USB serial monitor is unavailable while running. Init failure is signalled
+//     by a fast blink on the onboard LED (D13) instead of a serial message.
 
 // --- Globals ---
-SoftwareSerial dfSerial(DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
 DFRobotDFPlayerMini df;
 
 uint8_t shuffleBag[TRACK_COUNT];   // shuffled 1..TRACK_COUNT
@@ -57,20 +62,26 @@ void seedRandomFromAnalogNoise() {
   randomSeed(seed ? seed : micros());
 }
 
+// No serial monitor on this wiring, so blink the onboard LED forever to report a fault.
+void blinkForever() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  while (true) {
+    digitalWrite(LED_BUILTIN, HIGH); delay(150);
+    digitalWrite(LED_BUILTIN, LOW);  delay(150);
+  }
+}
+
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  Serial.begin(9600);
-  dfSerial.begin(9600);
+  Serial.begin(9600);          // hardware UART, shared with the DFPlayer Mini
 
   seedRandomFromAnalogNoise();
   refillBag();
 
-  if (!df.begin(dfSerial)) {
-    Serial.println(F("DFPlayer init failed. Check wiring and SD card."));
-    while (true) { delay(500); }
+  if (!df.begin(Serial)) {
+    blinkForever();            // DFPlayer init failed. Check wiring and SD card.
   }
   df.volume(VOLUME);
-  Serial.println(F("Ready. Press the button."));
 }
 
 void loop() {
@@ -80,10 +91,7 @@ void loop() {
   if (btn != lastBtnState && (now - lastBtnEdgeMs) > DEBOUNCE_MS) {
     lastBtnEdgeMs = now;
     if (lastBtnState == HIGH && btn == LOW) {     // falling edge = press
-      uint8_t t = nextTrack();
-      Serial.print(F("Playing track "));
-      Serial.println(t);
-      df.play(t);
+      df.play(nextTrack());
     }
     lastBtnState = btn;
   }
